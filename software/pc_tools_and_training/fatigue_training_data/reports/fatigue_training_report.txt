@@ -1,0 +1,40 @@
+=== P03/P05 clean 2s fatigue model ===
+rows=1320 features=30 groups=30
+label_counts={1: 880, 0: 440}
+fold 1: acc=0.875, test_groups=6
+fold 2: acc=0.894, test_groups=6
+fold 3: acc=0.856, test_groups=6
+fold 4: acc=0.951, test_groups=6
+fold 5: acc=0.852, test_groups=6
+confusion matrix rows=true [Ideal=0, Fatigue=1], cols=pred
+[[355  85]
+ [ 66 814]]
+              precision    recall  f1-score   support
+
+       Ideal      0.843     0.807     0.825       440
+     Fatigue      0.905     0.925     0.915       880
+
+    accuracy                          0.886      1320
+   macro avg      0.874     0.866     0.870      1320
+weighted avg      0.885     0.886     0.885      1320
+
+
+=== All common-feature fatigue model ===
+rows=2655 features=30 groups=45
+label_counts={1: 1770, 0: 885}
+fold 1: acc=0.804, test_groups=9
+fold 2: acc=0.810, test_groups=9
+fold 3: acc=0.798, test_groups=9
+fold 4: acc=0.891, test_groups=9
+fold 5: acc=0.774, test_groups=9
+confusion matrix rows=true [Ideal=0, Fatigue=1], cols=pred
+[[ 621  264]
+ [ 226 1544]]
+              precision    recall  f1-score   support
+
+       Ideal      0.733     0.702     0.717       885
+     Fatigue      0.854     0.872     0.863      1770
+
+    accuracy                          0.815      2655
+   macro avg      0.794     0.787     0.790      2655
+weighted avg      0.814     0.815     0.814      2655
