@@ -77,6 +77,18 @@
 #define FINSH_USING_DESCRIPTION
 #define FINSH_ARG_MAX 10
 
+/* Device virtual file system for SD card CSV database */
+#define RT_USING_DFS
+#define DFS_FILESYSTEMS_MAX 4
+#define DFS_FILESYSTEM_TYPES_MAX 4
+#define DFS_FD_MAX 16
+#define RT_USING_DFS_ELMFAT
+#define RT_DFS_ELM_CODE_PAGE 936
+#define RT_DFS_ELM_WORD_ACCESS
+#define RT_DFS_ELM_USE_LFN 3
+#define RT_DFS_ELM_MAX_LFN 255
+#define RT_DFS_ELM_DRIVES 2
+
 /* Device Drivers */
 
 #define RT_USING_DEVICE_IPC
@@ -86,6 +98,8 @@
 #define RT_USING_I2C
 #define RT_USING_I2C_BITOPS
 #define RT_USING_PIN
+#define RT_USING_ADC
+#define RT_USING_SDIO
 #define RT_USING_SPI
 
 /* Using USB */

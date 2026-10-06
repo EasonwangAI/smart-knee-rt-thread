@@ -14,6 +14,9 @@
 static struct rt_spi_device *lcd_spi = RT_NULL;
 static rt_bool_t lcd_ready = RT_FALSE;
 static rt_bool_t fit_layout_ready = RT_FALSE;
+static volatile rt_bool_t lcd_spi_fault = RT_FALSE;
+static volatile rt_uint32_t lcd_spi_error_count = 0;
+static rt_uint8_t lcd_fill_line[GC9A01_WIDTH * 2];
 
 static void lcd_delay_ms(rt_uint32_t ms)
 {
@@ -55,35 +58,59 @@ static rt_err_t lcd_spi_attach(void)
     return rt_spi_configure(lcd_spi, &cfg);
 }
 
-static void lcd_write_cmd(rt_uint8_t cmd)
+static rt_bool_t lcd_send_checked(const rt_uint8_t *data, rt_size_t len)
 {
-    if (lcd_spi == RT_NULL) return;
+    rt_size_t sent;
+
+    if (lcd_spi == RT_NULL || data == RT_NULL || len == 0) return RT_FALSE;
+
+    sent = rt_spi_send(lcd_spi, data, len);
+    if (sent != len)
+    {
+        lcd_spi_error_count++;
+        if (!lcd_spi_fault)
+        {
+            rt_kprintf("TFT,SPI_ERROR,count=%lu,sent=%lu,expected=%lu\n",
+                       (unsigned long)lcd_spi_error_count,
+                       (unsigned long)sent,
+                       (unsigned long)len);
+        }
+        lcd_spi_fault = RT_TRUE;
+        return RT_FALSE;
+    }
+
+    return RT_TRUE;
+}
+
+static rt_bool_t lcd_write_cmd(rt_uint8_t cmd)
+{
+    if (lcd_spi == RT_NULL) return RT_FALSE;
 
     rt_pin_write(GC9A01_PIN_DC, PIN_LOW);
-    rt_spi_send(lcd_spi, &cmd, 1);
+    return lcd_send_checked(&cmd, 1);
 }
 
-static void lcd_write_data(const rt_uint8_t *data, rt_size_t len)
+static rt_bool_t lcd_write_data(const rt_uint8_t *data, rt_size_t len)
 {
-    if (lcd_spi == RT_NULL || data == RT_NULL || len == 0) return;
+    if (lcd_spi == RT_NULL || data == RT_NULL || len == 0) return RT_FALSE;
 
     rt_pin_write(GC9A01_PIN_DC, PIN_HIGH);
-    rt_spi_send(lcd_spi, data, len);
+    return lcd_send_checked(data, len);
 }
 
-static void lcd_write_u8(rt_uint8_t data)
+static rt_bool_t lcd_write_u8(rt_uint8_t data)
 {
-    lcd_write_data(&data, 1);
+    return lcd_write_data(&data, 1);
 }
 
-static void lcd_cmd_data(rt_uint8_t cmd, const rt_uint8_t *data, rt_size_t len)
+static rt_bool_t lcd_cmd_data(rt_uint8_t cmd, const rt_uint8_t *data, rt_size_t len)
 {
-    lcd_write_cmd(cmd);
-    lcd_write_data(data, len);
+    if (!lcd_write_cmd(cmd)) return RT_FALSE;
+    return lcd_write_data(data, len);
 }
 
-static void lcd_set_window(rt_uint16_t x0, rt_uint16_t y0,
-                           rt_uint16_t x1, rt_uint16_t y1)
+static rt_bool_t lcd_set_window(rt_uint16_t x0, rt_uint16_t y0,
+                                rt_uint16_t x1, rt_uint16_t y1)
 {
     rt_uint8_t data[4];
 
@@ -91,15 +118,15 @@ static void lcd_set_window(rt_uint16_t x0, rt_uint16_t y0,
     data[1] = (rt_uint8_t)(x0 & 0xff);
     data[2] = (rt_uint8_t)(x1 >> 8);
     data[3] = (rt_uint8_t)(x1 & 0xff);
-    lcd_cmd_data(0x2A, data, sizeof(data));
+    if (!lcd_cmd_data(0x2A, data, sizeof(data))) return RT_FALSE;
 
     data[0] = (rt_uint8_t)(y0 >> 8);
     data[1] = (rt_uint8_t)(y0 & 0xff);
     data[2] = (rt_uint8_t)(y1 >> 8);
     data[3] = (rt_uint8_t)(y1 & 0xff);
-    lcd_cmd_data(0x2B, data, sizeof(data));
+    if (!lcd_cmd_data(0x2B, data, sizeof(data))) return RT_FALSE;
 
-    lcd_write_cmd(0x2C);
+    return lcd_write_cmd(0x2C);
 }
 
 static void lcd_reset(void)
@@ -150,7 +177,7 @@ static void lcd_init_sequence(void)
     lcd_cmd_data(0x8F, (const rt_uint8_t *)"\xFF", 1);
 
     lcd_cmd_data(0xB6, b6, sizeof(b6));
-    lcd_cmd_data(0x36, (const rt_uint8_t *)"\x48", 1);
+    lcd_cmd_data(0x36, (const rt_uint8_t *)"\x88", 1);
     lcd_cmd_data(0x3A, (const rt_uint8_t *)"\x05", 1);
     lcd_cmd_data(0x90, (const rt_uint8_t *)"\x08\x08\x08\x08", 4);
     lcd_cmd_data(0xBD, (const rt_uint8_t *)"\x06", 1);
@@ -192,7 +219,11 @@ rt_err_t gc9a01_init(void)
 {
     rt_err_t result;
 
-    if (lcd_ready) return RT_EOK;
+    if (lcd_ready && !lcd_spi_fault) return RT_EOK;
+
+    lcd_ready = RT_FALSE;
+    fit_layout_ready = RT_FALSE;
+    lcd_spi_fault = RT_FALSE;
 
     rt_pin_mode(GC9A01_PIN_RST, PIN_MODE_OUTPUT);
     rt_pin_mode(GC9A01_PIN_DC, PIN_MODE_OUTPUT);
@@ -206,10 +237,28 @@ rt_err_t gc9a01_init(void)
 
     lcd_reset();
     lcd_init_sequence();
+    if (lcd_spi_fault)
+    {
+        return -RT_EIO;
+    }
     lcd_ready = RT_TRUE;
     gc9a01_clear(GC9A01_BLACK);
 
+    if (lcd_spi_fault)
+    {
+        lcd_ready = RT_FALSE;
+        return -RT_EIO;
+    }
+
     return RT_EOK;
+}
+
+rt_err_t gc9a01_recover(void)
+{
+    lcd_ready = RT_FALSE;
+    fit_layout_ready = RT_FALSE;
+    lcd_spi_fault = RT_FALSE;
+    return gc9a01_init();
 }
 
 rt_bool_t gc9a01_is_ready(void)
@@ -217,33 +266,34 @@ rt_bool_t gc9a01_is_ready(void)
     return lcd_ready;
 }
 
+rt_bool_t gc9a01_needs_recovery(void)
+{
+    return lcd_spi_fault;
+}
+
 void gc9a01_fill_rect(rt_uint16_t x, rt_uint16_t y,
                       rt_uint16_t w, rt_uint16_t h,
                       rt_uint16_t color)
 {
-    rt_uint32_t pixels;
-    rt_uint8_t line[512];
-    rt_size_t chunk_pixels = sizeof(line) / 2;
+    rt_size_t bytes;
 
-    if (!lcd_ready || w == 0 || h == 0) return;
+    if (!lcd_ready || lcd_spi_fault || w == 0 || h == 0) return;
     if (x >= GC9A01_WIDTH || y >= GC9A01_HEIGHT) return;
     if (x + w > GC9A01_WIDTH) w = GC9A01_WIDTH - x;
     if (y + h > GC9A01_HEIGHT) h = GC9A01_HEIGHT - y;
 
-    for (rt_size_t i = 0; i < sizeof(line); i += 2)
+    bytes = (rt_size_t)w * 2;
+    for (rt_size_t i = 0; i < bytes; i += 2)
     {
-        line[i] = (rt_uint8_t)(color >> 8);
-        line[i + 1] = (rt_uint8_t)(color & 0xff);
+        lcd_fill_line[i] = (rt_uint8_t)(color >> 8);
+        lcd_fill_line[i + 1] = (rt_uint8_t)(color & 0xff);
     }
 
-    lcd_set_window(x, y, x + w - 1, y + h - 1);
-    pixels = (rt_uint32_t)w * h;
-    rt_pin_write(GC9A01_PIN_DC, PIN_HIGH);
-    while (pixels > 0)
+    for (rt_uint16_t row = 0; row < h; row++)
     {
-        rt_size_t now = pixels > chunk_pixels ? chunk_pixels : pixels;
-        rt_spi_send(lcd_spi, line, now * 2);
-        pixels -= now;
+        if (!lcd_set_window(x, y + row, x + w - 1, y + row)) break;
+        rt_pin_write(GC9A01_PIN_DC, PIN_HIGH);
+        if (!lcd_send_checked(lcd_fill_line, bytes)) break;
     }
 }
 
@@ -328,7 +378,8 @@ static void draw_char(rt_uint16_t x, rt_uint16_t y, char c,
     if (x >= GC9A01_WIDTH || y >= GC9A01_HEIGHT) return;
     if (x + width > GC9A01_WIDTH || y + height > GC9A01_HEIGHT) return;
 
-    lcd_set_window(x, y, x + width - 1, y + height - 1);
+    if (lcd_spi_fault ||
+        !lcd_set_window(x, y, x + width - 1, y + height - 1)) return;
     rt_pin_write(GC9A01_PIN_DC, PIN_HIGH);
 
     for (rt_uint8_t row = 0; row < 8; row++)
@@ -349,7 +400,7 @@ static void draw_char(rt_uint16_t x, rt_uint16_t y, char c,
 
         for (rt_uint8_t ys = 0; ys < scale; ys++)
         {
-            rt_spi_send(lcd_spi, line, pos);
+            if (!lcd_send_checked(line, pos)) return;
         }
     }
 }
@@ -357,7 +408,7 @@ static void draw_char(rt_uint16_t x, rt_uint16_t y, char c,
 void gc9a01_draw_text(rt_uint16_t x, rt_uint16_t y, const char *text,
                       rt_uint16_t fg, rt_uint16_t bg, rt_uint8_t scale)
 {
-    if (!lcd_ready || text == RT_NULL) return;
+    if (!lcd_ready || lcd_spi_fault || text == RT_NULL) return;
     if (scale == 0) scale = 1;
 
     while (*text != '\0')
@@ -414,9 +465,9 @@ void gc9a01_show_fit(rt_uint32_t total_count, rt_uint32_t squat_count,
     static rt_uint16_t prev_fatigue = 0xffffU;
     static rt_uint8_t prev_alert = 0xffU;
     static char prev_action[12] = "";
-    static char prev_emg[12] = "";
+    static char prev_emg[24] = "";
 
-    if (!lcd_ready) return;
+    if (!lcd_ready || lcd_spi_fault) return;
 
     redraw_all = !fit_layout_ready;
     if (!fit_layout_ready)

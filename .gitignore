@@ -27,3 +27,20 @@ Thumbs.db
 # Runtime logs
 session_*.log
 *.tmp
+
+# Arduino / Android / private local files
+BuildV*/
+.workbuddy/
+.gradle/
+.idea/
+local.properties
+*.jks
+*.keystore
+*.apk.idsig
+.sconsign.dblite
+.config.old
+*.apk
+
+# Explicitly version the supplied install / firmware artifacts.
+!software/android/releases/*.apk
+!firmware/releases/*.bin

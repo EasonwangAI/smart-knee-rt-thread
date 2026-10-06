@@ -80,6 +80,7 @@ rt_err_t ads1292_deinit(void);
  * Pass NULL to unregister.  Returns the previously registered callback.
  */
 ads1292_sample_cb_t ads1292_register_sample_cb(ads1292_sample_cb_t cb);
+rt_err_t ads1292_recover(void);
 
 void ADS1292_PowerOnInit(void);
 rt_uint8_t ADS1292_SPI(rt_uint8_t com);

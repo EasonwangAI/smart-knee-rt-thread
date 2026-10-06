@@ -1,0 +1,10 @@
+{
+  "rms_mean": 900.0,
+  "mav_mean": 700.0,
+  "wl_mean": 150000.0,
+  "zc_mean": 0.0,
+  "ssc_mean": 0.0,
+  "row_count": 83,
+  "angle_x10_range": 10.0,
+  "active_ratio": 0.0
+}

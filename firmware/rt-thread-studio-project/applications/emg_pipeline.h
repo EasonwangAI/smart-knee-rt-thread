@@ -13,11 +13,11 @@ extern "C" {
 #define EMG_WINDOW_SAMPLES      256
 #define EMG_HOP_SAMPLES         64
 
-#define EMG_REST_CAL_WINDOWS        80
-#define EMG_ACTIVE_CAL_WINDOWS      40
+#define EMG_REST_CAL_WINDOWS        20
+#define EMG_ACTIVE_CAL_WINDOWS      20
 
-#define EMG_FATIGUE_SCORE_THRESHOLD 80
-#define EMG_FATIGUE_HOLD_WINDOWS    10
+#define EMG_FATIGUE_SCORE_THRESHOLD 55
+#define EMG_FATIGUE_HOLD_WINDOWS    2
 
 typedef enum
 {

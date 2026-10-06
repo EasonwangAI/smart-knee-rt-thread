@@ -1,0 +1,3 @@
+<resources>
+    <integer name="api_poll_interval_ms">500</integer>
+</resources>

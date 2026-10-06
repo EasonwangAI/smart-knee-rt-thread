@@ -10,6 +10,7 @@ static struct rt_semaphore ads1292_drdy_sem;
 static rt_thread_t ads1292_thread = RT_NULL;
 static rt_bool_t ads1292_thread_running = RT_FALSE;
 static rt_bool_t ads1292_irq_attached = RT_FALSE;
+static volatile rt_bool_t ads1292_recovering = RT_FALSE;
 
 static const rt_uint16_t ads1292_spi_modes[] = {
     RT_SPI_MODE_0,
@@ -200,6 +201,11 @@ static void ads1292_data_thread_entry(void *parameter)
             break;
         }
 
+        if (ads1292_recovering)
+        {
+            continue;
+        }
+
         if (rt_pin_read(ADS1292_PIN_DRDY) == PIN_LOW)
         {
             rt_uint8_t local[9];
@@ -364,6 +370,56 @@ rt_err_t ads1292_init(void)
     rt_pin_irq_enable(ADS1292_PIN_DRDY, PIN_IRQ_ENABLE);
 
     return RT_EOK;
+}
+
+rt_err_t ads1292_recover(void)
+{
+    rt_err_t result = RT_EOK;
+    rt_uint8_t retry = 0;
+
+    if (ads1292_spi_dev == RT_NULL)
+    {
+        return -RT_ERROR;
+    }
+
+    if (ads1292_recovering)
+    {
+        return -RT_EBUSY;
+    }
+
+    ads1292_recovering = RT_TRUE;
+    LOG_W("recovering ADS1292R sampling");
+
+    rt_pin_irq_enable(ADS1292_PIN_DRDY, PIN_IRQ_DISABLE);
+    rt_thread_mdelay(5);
+
+    ads1292_recive_flag = 0;
+    rt_memset((void *)ads1292_Cache, 0, sizeof(ads1292_Cache));
+
+    rt_pin_write(ADS1292_PIN_START, PIN_LOW);
+    ads1292_hard_reset();
+    ADS1292_PowerOnInit();
+
+    while (Set_ADS1292_Collect(0))
+    {
+        retry++;
+        LOG_E("recover register setup failed, retry=%u", retry);
+        if (retry >= ADS1292_INIT_RETRY_MAX)
+        {
+            result = -RT_ERROR;
+            break;
+        }
+        ads1292_delay_ms(100);
+    }
+
+    if (result == RT_EOK)
+    {
+        rt_pin_irq_enable(ADS1292_PIN_DRDY, PIN_IRQ_ENABLE);
+        LOG_W("ADS1292R sampling recovered");
+    }
+
+    ads1292_recovering = RT_FALSE;
+    return result;
 }
 
 rt_err_t ads1292_deinit(void)

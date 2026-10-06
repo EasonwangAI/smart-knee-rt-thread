@@ -1,5 +1,6 @@
 #include "emg_pipeline.h"
 #include "ads1292.h"
+#include "fatigue_rf_model.h"
 
 #include <math.h>
 #include <rtdevice.h>
@@ -22,8 +23,15 @@
 #define EMG_ZC_THRESHOLD_CEIL       20000
 #define EMG_SSC_THRESHOLD_FLOOR     150
 #define EMG_SSC_THRESHOLD_CEIL      20000
-#define EMG_ACTIVE_FLOOR            3000
-#define EMG_ACTIVE_RATIO_PERCENT    250
+#define EMG_ACTIVE_FLOOR            2000
+#define EMG_ACTIVE_RATIO_PERCENT    200
+
+#define EMG_MODEL_AGG_FRAMES        24
+#define EMG_MODEL_RESET_INACTIVE_WINDOWS 16
+#define EMG_MODEL_WINDOW_SAMPLES    1500.0f
+#define EMG_MODEL_WL_SCALE          (EMG_MODEL_WINDOW_SAMPLES / (float)EMG_WINDOW_SAMPLES)
+#define EMG_MODEL_ADS_LSB_MV        ((2.0f * 2.42f * 1000.0f) / (6.0f * 16777216.0f))
+#define EMG_MODEL_EPS               1.0e-6f
 
 #ifndef EMG_RAW_OUTPUT_DEFAULT_ENABLE
 #define EMG_RAW_OUTPUT_DEFAULT_ENABLE 0
@@ -34,7 +42,7 @@
 #define EMG_RAW_THREAD_PRIORITY     23
 #define EMG_RAW_THREAD_TICK         10
 #define EMG_RAW_PRINT_BUF_SIZE      384
-#define EMG_RAW_FAST_BAUD           BAUD_RATE_460800
+#define EMG_RAW_FAST_BAUD           BAUD_RATE_921600
 #define EMG_RAW_SLOW_BAUD           BAUD_RATE_115200
 
 typedef struct
@@ -112,6 +120,15 @@ typedef struct
     int32_t  emg_raw;
 } emg_raw_sample_t;
 
+typedef struct
+{
+    uint32_t rms;
+    uint32_t mav;
+    uint32_t wl;
+    uint16_t zc;
+    uint16_t ssc;
+} emg_model_frame_t;
+
 static emg_biquad_state_t   biquad_state[EMG_BIQUAD_COUNT];
 static emg_window_state_t   win;
 static emg_rest_cal_t       rest_cal;
@@ -134,6 +151,12 @@ static emg_snapshot_t       snap_pub;
 static emg_rep_features_t   rep_live;
 static volatile rt_bool_t   rep_active;
 
+static emg_model_frame_t    model_frames[EMG_MODEL_AGG_FRAMES];
+static uint32_t             model_frame_pos;
+static uint32_t             model_frame_count;
+static uint16_t             model_inactive_windows;
+static uint16_t             fatigue_state_score;
+
 static emg_raw_sample_t     raw_ring[EMG_RAW_RING_SIZE];
 static uint32_t             raw_head;
 static uint32_t             raw_tail;
@@ -144,12 +167,6 @@ static rt_bool_t            raw_sem_ready;
 static volatile rt_bool_t   raw_output_enable =
     EMG_RAW_OUTPUT_DEFAULT_ENABLE ? RT_TRUE : RT_FALSE;
 static volatile uint8_t     raw_output_channel = 2;
-
-/* DC step-guard state, accessible from cal_reset to clear after baud /
- * electrode changes that would otherwise leave a stale dc_est around. */
-static float                dc_est;
-static float                jump_env = 1.0f;
-static rt_bool_t            dc_init;
 
 static int u32_cmp(const void *a, const void *b)
 {
@@ -193,6 +210,81 @@ static uint32_t emg_isqrt64(uint64_t v)
 {
     if (v == 0) return 0;
     return (uint32_t)sqrt((double)v);
+}
+
+static void emg_model_reset(void)
+{
+    model_frame_pos = 0;
+    model_frame_count = 0;
+    model_inactive_windows = 0;
+    fatigue_state_score = 0;
+    rt_memset(model_frames, 0, sizeof(model_frames));
+}
+
+static void emg_model_push(uint32_t rms, uint32_t mav, uint32_t wl,
+                           uint16_t zc, uint16_t ssc)
+{
+    model_frames[model_frame_pos].rms = rms;
+    model_frames[model_frame_pos].mav = mav;
+    model_frames[model_frame_pos].wl = wl;
+    model_frames[model_frame_pos].zc = zc;
+    model_frames[model_frame_pos].ssc = ssc;
+
+    model_frame_pos = (model_frame_pos + 1U) % EMG_MODEL_AGG_FRAMES;
+    if (model_frame_count < EMG_MODEL_AGG_FRAMES) model_frame_count++;
+}
+
+static uint16_t emg_score_fatigue_rf(void)
+{
+    if (model_frame_count < EMG_MODEL_AGG_FRAMES) return 0;
+
+    uint64_t sum_mav = 0;
+    uint64_t sum_wl = 0;
+    uint64_t sum_rms_sq = 0;
+    uint32_t sum_zc = 0;
+    uint32_t sum_ssc = 0;
+
+    for (uint32_t i = 0; i < EMG_MODEL_AGG_FRAMES; i++)
+    {
+        const emg_model_frame_t *f = &model_frames[i];
+        sum_mav += f->mav;
+        sum_wl += f->wl;
+        sum_rms_sq += (uint64_t)f->rms * (uint64_t)f->rms;
+        sum_zc += f->zc;
+        sum_ssc += f->ssc;
+    }
+
+    const float n = (float)EMG_MODEL_AGG_FRAMES;
+    const float mean_mav_counts = (float)sum_mav / n;
+    const float mean_wl_counts = (float)sum_wl / n;
+    const float mean_rms_sq_counts = (float)((double)sum_rms_sq / (double)EMG_MODEL_AGG_FRAMES);
+
+    const float mav = mean_mav_counts * EMG_MODEL_ADS_LSB_MV;
+    const float rms = sqrtf(mean_rms_sq_counts) * EMG_MODEL_ADS_LSB_MV;
+    const float wl = mean_wl_counts * EMG_MODEL_WL_SCALE * EMG_MODEL_ADS_LSB_MV;
+    const float iemg = mav * EMG_MODEL_WINDOW_SAMPLES;
+    const float mean_rms_sq_mv = mean_rms_sq_counts * EMG_MODEL_ADS_LSB_MV * EMG_MODEL_ADS_LSB_MV;
+    float var = mean_rms_sq_mv - mav * mav;
+    if (var < 0.0f) var = 0.0f;
+
+    const float zc = ((float)sum_zc / n) * EMG_MODEL_WL_SCALE;
+    const float ssc = ((float)sum_ssc / n) * EMG_MODEL_WL_SCALE;
+
+    float features[FATIGUE_RF_FEATURE_COUNT];
+    features[0] = mav;
+    features[1] = rms;
+    features[2] = wl;
+    features[3] = iemg;
+    features[4] = var;
+    features[5] = zc;
+    features[6] = ssc;
+    features[7] = zc / (mav + EMG_MODEL_EPS);
+    features[8] = ssc / (rms + EMG_MODEL_EPS);
+    features[9] = rms / (mav + EMG_MODEL_EPS);
+    features[10] = wl / (iemg + EMG_MODEL_EPS);
+    features[11] = var / ((rms * rms) + EMG_MODEL_EPS);
+
+    return (uint16_t)fatigue_rf_predict_proba_q100(features);
 }
 
 static uint16_t emg_compute_ssc(void)
@@ -417,11 +509,15 @@ static void emg_finalize_rest_baseline(void)
     active_threshold = clamp_u32((int32_t)((uint64_t)rest_mav * EMG_ACTIVE_RATIO_PERCENT / 100U),
                                  EMG_ACTIVE_FLOOR, 0x7FFFFFFFU);
 
-    phase = EMG_PHASE_ACTIVE_CAL;
-    status = EMG_STATUS_CAL;
+    /* Rest calibration establishes noise and activity thresholds. Active
+     * baseline learning continues online and does not block normal use. */
+    emg_model_reset();
+    alert_hold = 0;
+    phase = EMG_PHASE_RUNNING;
+    status = EMG_STATUS_OK;
 }
 
-static void emg_finalize_active_baseline(void)
+static void emg_finalize_active_baseline(rt_bool_t enter_running)
 {
     uint32_t n = active_cal.count;
     base_rms = median_u32(active_cal.rms_buf, n);
@@ -435,8 +531,13 @@ static void emg_finalize_active_baseline(void)
     if (base_mav == 0) base_mav = 1;
     if (base_rms == 0) base_rms = 1;
 
-    phase  = EMG_PHASE_RUNNING;
-    status = EMG_STATUS_OK;
+    if (enter_running)
+    {
+        emg_model_reset();
+        alert_hold = 0;
+        phase  = EMG_PHASE_RUNNING;
+        status = EMG_STATUS_OK;
+    }
 }
 
 static uint16_t emg_score_fatigue(uint32_t rms, uint32_t mav, uint32_t wl, uint16_t zc)
@@ -459,6 +560,28 @@ static uint16_t emg_score_fatigue(uint32_t rms, uint32_t mav, uint32_t wl, uint1
                               clamp_i32(freq_score, 0, EMG_FATIGUE_FREQ_WEIGHT));
     if (sum > 100U) sum = 100U;
     return (uint16_t)sum;
+}
+
+static uint16_t emg_smooth_fatigue_score(uint16_t instant_score)
+{
+    if (instant_score > 100U) instant_score = 100U;
+
+    if (fatigue_state_score == 0U)
+    {
+        fatigue_state_score = instant_score;
+    }
+    else if (instant_score >= fatigue_state_score)
+    {
+        fatigue_state_score = (uint16_t)(
+            ((uint32_t)fatigue_state_score * 3U + instant_score + 2U) / 4U);
+    }
+    else
+    {
+        fatigue_state_score = (uint16_t)(
+            ((uint32_t)fatigue_state_score * 19U + instant_score + 10U) / 20U);
+    }
+
+    return fatigue_state_score;
 }
 
 static void emg_eval_window(void)
@@ -507,7 +630,8 @@ static void emg_eval_window(void)
             active_cal.zc_buf[k]  = zc;
             active_cal.ssc_buf[k] = ssc;
             active_cal.count++;
-            if (active_cal.count == EMG_ACTIVE_CAL_WINDOWS) emg_finalize_active_baseline();
+            if (active_cal.count == EMG_ACTIVE_CAL_WINDOWS)
+                emg_finalize_active_baseline(RT_TRUE);
         }
         status = EMG_STATUS_CAL;
         break;
@@ -517,19 +641,54 @@ static void emg_eval_window(void)
         active = (mav >= active_threshold) ? 1U : 0U;
         if (active)
         {
-            score = emg_score_fatigue(rms, mav, wl, zc);
+            uint16_t rf_score;
+            uint16_t trend_score = 0U;
+
+            model_inactive_windows = 0U;
+
+            if (active_cal.count < EMG_ACTIVE_CAL_WINDOWS)
+            {
+                uint32_t k = active_cal.count;
+                active_cal.rms_buf[k] = rms;
+                active_cal.mav_buf[k] = mav;
+                active_cal.wl_buf[k]  = wl;
+                active_cal.zc_buf[k]  = zc;
+                active_cal.ssc_buf[k] = ssc;
+                active_cal.count++;
+                if (active_cal.count == EMG_ACTIVE_CAL_WINDOWS)
+                    emg_finalize_active_baseline(RT_FALSE);
+            }
+
+            emg_model_push(rms, mav, wl, zc, ssc);
+            rf_score = emg_score_fatigue_rf();
+            if (base_rms > 0U && base_mav > 0U && base_wl > 0U && base_zc > 0U)
+            {
+                trend_score = emg_score_fatigue(rms, mav, wl, zc);
+            }
+
+            score = emg_smooth_fatigue_score(
+                rf_score >= trend_score ? rf_score : trend_score);
             if (score >= EMG_FATIGUE_SCORE_THRESHOLD)
             {
                 if (alert_hold < EMG_FATIGUE_HOLD_WINDOWS) alert_hold++;
             }
             else
             {
-                if (alert_hold > 0) alert_hold--;
+                alert_hold = 0;
             }
         }
         else
         {
-            if (alert_hold > 0) alert_hold--;
+            alert_hold = 0;
+            if (model_inactive_windows < EMG_MODEL_RESET_INACTIVE_WINDOWS)
+                model_inactive_windows++;
+
+            if (model_inactive_windows >= EMG_MODEL_RESET_INACTIVE_WINDOWS)
+            {
+                emg_model_reset();
+            }
+
+            score = fatigue_state_score;
         }
         alert = (alert_hold >= EMG_FATIGUE_HOLD_WINDOWS) ? 1U : 0U;
         status = alert ? EMG_STATUS_ALERT : (active ? EMG_STATUS_OK : EMG_STATUS_REST);
@@ -559,56 +718,10 @@ static void emg_on_sample(rt_int32_t ch1, rt_int32_t emg_raw)
     emg_raw_enqueue(win.sample_count,
                     (raw_output_channel == 1U) ? ch1 : emg_raw);
 
-    /* DC step guard: see file-scope dc_est / jump_env / dc_init declarations.
-     * Electrode contact transitions inject huge DC steps that leak into the
-     * HPF output as fake EMG bursts. Track a slow DC estimate and a slow
-     * |delta| envelope; when a sample jumps by more than 8x the envelope,
-     * treat it as a contact transient -- skip biquad update for one sample
-     * and decay the biquad state so the next sample starts from rest. The
-     * HPF still does the primary baseline-removal work; this is a safety
-     * net for sudden steps the HPF cannot follow without ringing. */
-    float xf = (float)emg_raw;
-    if (!dc_init)
+    float y = (float)emg_raw;
+    for (int i = 0; i < EMG_BIQUAD_COUNT; i++)
     {
-        dc_est = xf;
-        jump_env = 1.0f;
-        dc_init = RT_TRUE;
-    }
-    float delta = xf - dc_est;
-    float abs_delta = delta < 0 ? -delta : delta;
-    rt_bool_t step_detected = (abs_delta > jump_env * 8.0f) && (jump_env > 100.0f);
-    /* slow update of estimates (always update with the rate-limited sample) */
-    if (step_detected)
-    {
-        /* clamp the contribution of an outlier so dc_est doesn't lurch */
-        float clamped = dc_est + (delta > 0 ? jump_env * 8.0f : -jump_env * 8.0f);
-        dc_est += (clamped - dc_est) * (1.0f / 256.0f);
-    }
-    else
-    {
-        dc_est   += delta      * (1.0f / 256.0f);
-        jump_env += (abs_delta - jump_env) * (1.0f / 512.0f);
-    }
-
-    float y;
-    if (step_detected)
-    {
-        /* decay biquad state aggressively so the next valid sample starts
-         * from a near-rest filter; avoids ringing into the EMG band. */
-        for (int i = 0; i < EMG_BIQUAD_COUNT; i++)
-        {
-            biquad_state[i].s1 *= 0.25f;
-            biquad_state[i].s2 *= 0.25f;
-        }
-        y = 0.0f;
-    }
-    else
-    {
-        y = xf;
-        for (int i = 0; i < EMG_BIQUAD_COUNT; i++)
-        {
-            y = biquad_df2t(&biquad_state[i], &emg_biquad_coefs[i], y);
-        }
+        y = biquad_df2t(&biquad_state[i], &emg_biquad_coefs[i], y);
     }
 
     int32_t  ac      = (int32_t)y;
@@ -689,6 +802,7 @@ void emg_pipeline_init(void)
     status = EMG_STATUS_CAL;
     alert_hold = 0;
     rep_active = RT_FALSE;
+    emg_model_reset();
 
     rest_rms = rest_mav = rest_wl = 0;
     rest_zc = rest_ssc = 0;
@@ -758,12 +872,7 @@ void emg_pipeline_cal_reset(void)
     phase = EMG_PHASE_REST_CAL;
     status = EMG_STATUS_CAL;
     alert_hold = 0;
-    /* Clear DC step-guard so the next sample re-seeds from current input. */
-    dc_init = RT_FALSE;
-    /* Also clear biquad memory: stale state from the previous session
-     * causes a fake transient at the first new sample. */
-    rt_memset(biquad_state, 0, sizeof(biquad_state));
-    rt_memset(&win, 0, sizeof(win));
+    emg_model_reset();
     rt_hw_interrupt_enable(level);
 
     rt_kprintf("CAL,REST_BEGIN,rest_windows=%u\n", (unsigned)EMG_REST_CAL_WINDOWS);
@@ -775,9 +884,18 @@ void emg_pipeline_active_cal_force(void)
     rt_memset(&active_cal, 0, sizeof(active_cal));
     base_rms = base_mav = base_wl = 0;
     base_zc = base_ssc = 0;
-    if (rest_cal.count >= EMG_REST_CAL_WINDOWS) phase = EMG_PHASE_ACTIVE_CAL;
-    else                                        phase = EMG_PHASE_REST_CAL;
-    status = EMG_STATUS_CAL;
+    if (rest_cal.count >= EMG_REST_CAL_WINDOWS)
+    {
+        phase = EMG_PHASE_RUNNING;
+        status = EMG_STATUS_OK;
+    }
+    else
+    {
+        phase = EMG_PHASE_REST_CAL;
+        status = EMG_STATUS_CAL;
+    }
+    alert_hold = 0;
+    emg_model_reset();
     rt_hw_interrupt_enable(level);
 }
 

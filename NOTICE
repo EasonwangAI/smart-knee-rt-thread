@@ -1,0 +1,7 @@
+Smart Knee RT-Thread Project
+Copyright 2026 Smart Knee RT-Thread Project Contributors
+
+This repository includes RT-Thread, STM32 HAL, CMSIS and other support
+components. Their original copyright notices and license files are retained
+in their respective directories. The project license does not replace the
+licenses or data-use terms of third-party components and datasets.

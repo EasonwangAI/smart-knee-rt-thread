@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <projectDescription>
-  <name>test_pro3</name>
+  <name>test_pro3_v8_dbui_kneeout</name>
   <comment />
   <projects>
 	</projects>
@@ -24,6 +24,5 @@
     <nature>org.eclipse.cdt.managedbuilder.core.managedBuildNature</nature>
     <nature>org.eclipse.cdt.managedbuilder.core.ScannerConfigNature</nature>
   </natures>
-  <name>test_pro3</name>
   <linkedResources />
 </projectDescription>

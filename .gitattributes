@@ -1,0 +1,7 @@
+* text=auto
+*.apk binary
+*.bin binary
+*.sqlite binary
+*.joblib binary
+*.png binary
+*.jpg binary

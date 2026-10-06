@@ -1,0 +1,28 @@
+source_family,person_id,gender,age,height_cm,weight_kg,thigh_cm,sport_habit,injury_history,unit_count,local_fatigue_known,notes,log_rms_mean,log_mav_mean,log_wl_per_sample_mean,rms_mav_ratio_mean,zc_density_mean,ssc_density_mean,angle_range_common_mean,active_ratio_mean
+external_public,ext_mat_01,unknown,,,,,unknown,unknown,54,no,external public subject; no demographics or fatigue labels,-0.956382474,-1.124229733,-1.385190192,1.474657423,0.220877046,0.495503525,3.919012093,0.0
+external_public,ext_mat_02,unknown,,,,,unknown,unknown,54,no,external public subject; no demographics or fatigue labels,-0.758020979,-0.963943223,-1.351253393,1.610189703,0.180697085,0.41888452,3.672833852,0.0
+external_public,ext_mat_03,unknown,,,,,unknown,unknown,54,no,external public subject; no demographics or fatigue labels,-0.896494256,-1.050527251,-1.540634191,1.430159261,0.133427153,0.440269843,3.617845796,0.0
+external_public,ext_mat_04,unknown,,,,,unknown,unknown,54,no,external public subject; no demographics or fatigue labels,-0.926492623,-1.089945811,-1.518654029,1.457909156,0.163665147,0.481433621,3.524739259,0.0
+external_public,ext_mat_05,unknown,,,,,unknown,unknown,54,no,external public subject; no demographics or fatigue labels,-0.719716965,-0.913714275,-1.415350354,1.563935766,0.140461881,0.434982593,3.727219685,0.0
+external_public,ext_mat_06,unknown,,,,,unknown,unknown,54,no,external public subject; no demographics or fatigue labels,-0.808181357,-0.994562361,-1.496539103,1.536782843,0.148011202,0.460272157,3.492561407,0.0
+external_public,ext_mat_07,unknown,,,,,unknown,unknown,54,no,external public subject; no demographics or fatigue labels,-0.82192248,-0.966093563,-1.308616967,1.393933588,0.173292689,0.496615387,3.702182963,0.0
+external_public,ext_mat_08,unknown,,,,,unknown,unknown,54,no,external public subject; no demographics or fatigue labels,-0.78040261,-0.915296512,-1.445810566,1.365100945,0.11093612,0.490755173,3.6865725,0.0
+external_public,ext_mat_09,unknown,,,,,unknown,unknown,54,no,external public subject; no demographics or fatigue labels,-1.026876621,-1.188616289,-1.594494079,1.452809858,0.177167928,0.503594825,3.876419259,0.0
+external_public,ext_mat_10,unknown,,,,,unknown,unknown,54,no,external public subject; no demographics or fatigue labels,-0.897705957,-1.049325625,-1.497974868,1.425226102,0.148482276,0.4876604,4.202467593,0.0
+external_public,ext_mat_11,unknown,,,,,unknown,unknown,54,no,external public subject; no demographics or fatigue labels,-1.087097638,-1.238830517,-1.516914044,1.419658043,0.2208277,0.530049904,3.598030593,0.0
+external_public,ext_mat_12,unknown,,,,,unknown,unknown,54,no,external public subject; no demographics or fatigue labels,-0.965372008,-1.095561352,-1.366807041,1.349917565,0.191800158,0.512291458,3.60510713,0.0
+external_public,ext_mat_13,unknown,,,,,unknown,unknown,54,no,external public subject; no demographics or fatigue labels,-0.785704771,-0.966662486,-1.507811444,1.517366198,0.119476741,0.321006374,3.50676113,0.0
+external_public,ext_mat_14,unknown,,,,,unknown,unknown,54,no,external public subject; no demographics or fatigue labels,-0.838655648,-1.020757135,-1.524791112,1.522936105,0.144447165,0.406357458,3.582506333,0.0
+external_public,ext_mat_15,unknown,,,,,unknown,unknown,54,no,external public subject; no demographics or fatigue labels,-0.747523959,-0.907733062,-1.387819459,1.446831691,0.143125313,0.473794849,3.122250648,0.0
+external_public,ext_mat_16,unknown,,,,,unknown,unknown,54,no,external public subject; no demographics or fatigue labels,-1.201961771,-1.342708704,-1.725082581,1.383355419,0.155229874,0.43706401,3.313030833,0.0
+local_logged,subject_01,男,19,175,65,41.5,ambiguous,none,54,yes,self collected subject type,4.646080897,4.381433836,4.600714424,1.878381663,0.040523423,0.149977881,12.824074074,0.425555556
+local_logged,subject_02,男,19,179,83,45,light,none,87,yes,self collected subject type,4.420437634,4.253593781,4.582200082,1.475093298,0.034891803,0.322087033,27.791954023,0.864862069
+local_logged,subject_03,男,19,175,66,42,ambiguous,none,60,yes,self collected subject type,4.469522478,4.234044942,4.498644418,1.740534233,0.049947766,0.242296608,18.811666667,0.858333333
+local_logged,subject_04,男,19,178,55,37,rare,none,110,yes,self collected subject type,4.465612063,4.307375169,4.599196642,1.443274517,0.046583519,0.364484464,22.393636364,0.833409091
+local_logged,subject_05,男,19,177,64,34,trained,unknown,44,yes,self collected subject type,3.622017015,3.397184146,3.754570691,1.929154391,0.026905178,0.17299927,14.786363636,0.556636364
+local_logged,subject_06,男,19,165,53,38,regular,none,146,yes,self collected subject type,4.378682147,4.151667618,4.476319981,1.717190817,0.027763431,0.180050329,25.930136986,0.835513699
+local_logged,subject_07,男,19,182,65,52,light,none,80,yes,self collected subject type,4.294180918,4.153204412,4.498161363,1.390359021,0.035126431,0.328025966,21.0525,0.483875
+local_logged,subject_08,男,19,177,58,36,regular,none,89,yes,self collected subject type,4.487564874,4.235485828,4.499692862,1.96882739,0.014725635,0.195353236,35.419101124,0.897337079
+local_logged,subject_09,男,19,176,58,36,light,none,53,yes,self collected subject type,3.623214415,3.503844887,3.877039734,1.320576085,2.3585e-05,0.005096682,39.796226415,0.0
+local_logged,subject_10,男,19,173,70,45,regular,none,65,yes,self collected subject type,3.43171856,3.2937191,3.591554604,1.399725583,0.000186716,0.00043483,19.604615385,0.234815385
+local_logged,subject_11,男,19,177,64,42,trained,knee,82,yes,self collected subject type,4.494018209,4.322606634,4.630355852,1.497998814,0.076586657,0.456868594,15.351219512,0.804195122

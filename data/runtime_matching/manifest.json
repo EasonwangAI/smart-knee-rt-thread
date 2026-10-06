@@ -1,0 +1,12 @@
+{
+  "generated_at": "2026-07-18T12:47:14",
+  "summary": {
+    "runtime_units": 1734,
+    "person_profiles": 27,
+    "local_units": 870,
+    "external_units": 864
+  },
+  "recommended_entry": "runtime_units_normalized.csv",
+  "demo_script": "match_query.py",
+  "publication_note": "Direct participant names removed from public copy; signal features and pseudonymous IDs retained."
+}

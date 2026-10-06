@@ -22,7 +22,7 @@ extern "C" {
 #endif
 
 #ifndef GC9A01_SPI_MAX_HZ
-#define GC9A01_SPI_MAX_HZ               (16 * 1000 * 1000)
+#define GC9A01_SPI_MAX_HZ               (2 * 1000 * 1000)
 #endif
 
 /* Wiring used by this project:
@@ -60,7 +60,9 @@ extern "C" {
 #define GC9A01_ORANGE                   0xFD20
 
 rt_err_t gc9a01_init(void);
+rt_err_t gc9a01_recover(void);
 rt_bool_t gc9a01_is_ready(void);
+rt_bool_t gc9a01_needs_recovery(void);
 void gc9a01_clear(rt_uint16_t color);
 void gc9a01_fill_rect(rt_uint16_t x, rt_uint16_t y,
                       rt_uint16_t w, rt_uint16_t h,

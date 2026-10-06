@@ -93,10 +93,10 @@ extern "C"
 #define BSP_I2C1_SDA_PIN    GET_PIN(B, 7)
 #endif
 
-/*#define BSP_USING_I2C2*/
+#define BSP_USING_I2C2
 #ifdef BSP_USING_I2C2
-#define BSP_I2C2_SCL_PIN    GET_PIN(port, pin)
-#define BSP_I2C2_SDA_PIN    GET_PIN(port, pin)
+#define BSP_I2C2_SCL_PIN    GET_PIN(B, 8)
+#define BSP_I2C2_SDA_PIN    GET_PIN(B, 9)
 #endif
 
 /*-------------------------- I2C CONFIG END --------------------------*/
@@ -185,7 +185,7 @@ extern "C"
  *
  */
 
-/*#define BSP_USING_ADC1*/
+#define BSP_USING_ADC1
 /*#define BSP_USING_ADC2*/
 /*#define BSP_USING_ADC3*/
 
@@ -267,7 +267,7 @@ extern "C"
  *
  */
 
-/*#define BSP_USING_SDIO*/
+#define BSP_USING_SDIO
 
 /*-------------------------- SDIO CONFIG END --------------------------*/
 

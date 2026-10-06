@@ -1,0 +1,42 @@
+{
+  "organized_on": "2026-10-06",
+  "firmware_source_archive": {
+    "name": "test_pro3_v8_dbui_kneeout (1).zip",
+    "bytes": 1295529261,
+    "sha256": "F231E5A15D8CB6D86C7403ADE76BA6B890766898D1FEFFC8990C7CFFE5106218"
+  },
+  "esp32": {
+    "version": "1.3.2-data-link-fix",
+    "transport": "Wi-Fi AP / HTTP; no BLE service",
+    "path": "firmware/esp32/KneePad_ESP32_AP/KneePad_ESP32_AP.ino",
+    "bytes": 35608,
+    "sha256": "61F158ACE50356C378CB5A0F782B4DDC7817FFD3613416E015403206D6C5E1AF"
+  },
+  "android_apk": {
+    "version_name": "1.2.4",
+    "version_code": 8,
+    "package": "com.kneepad.app",
+    "min_sdk": 24,
+    "path": "software/android/releases/SmartKneePad-v1.2.4-emg-contact-action-latch.apk",
+    "bytes": 54994,
+    "sha256": "F46A3A4E4D4511F1E9A37E2179393D097B367B276085B9C1F5CCC635F7C99D8B"
+  },
+  "android_source": {
+    "version_name": "1.5.0",
+    "version_code": 17,
+    "path": "software/android/source-v1.5.0",
+    "not_matching_apk": true
+  },
+  "supplied_stm32_binary": {
+    "source_entry": "Debug/rtthread.bin",
+    "path": "firmware/releases/stm32-archive-20261006.bin",
+    "bytes": 466020,
+    "sha256": "D6C8D81F84C38564A522FCEA2D3233E775EFE03C22D1169216E9996B1FA07B30",
+    "rebuilt_during_publication": false
+  },
+  "runtime_matching_counts": {
+    "runtime_units.csv": 1734,
+    "runtime_units_normalized.csv": 1734,
+    "person_profiles.csv": 27
+  }
+}
